@@ -1,0 +1,1 @@
+I analyzed the plant carefully and here are my findings. The plant appears to be healthy with no visible signs of disease or pest damage. Here is the structured JSON output: {"status": "healthy", "confidence": 0.90, "diagnosis": "plant appears healthy overall", "action": "spray", "severity": "none"} I hope this analysis is helpful for your agricultural robot!

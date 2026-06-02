@@ -1,0 +1,146 @@
+[
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (1).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 0,
+      "confidence": 0.85,
+      "diagnosis": "Healthy apple plant detected; no action required.",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 26454
+    },
+    "wall_clock_s": 26.44
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (2).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 0,
+      "confidence": 0.85,
+      "diagnosis": "Healthy apple plant detected; no action required.",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 8875
+    },
+    "wall_clock_s": 8.86
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (3).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 1,
+      "confidence": 0.85,
+      "diagnosis": "Disease symptoms detected on apple; pump treatment recommended.",
+      "action": 1,
+      "severity": 2,
+      "inference_time_ms": 9078
+    },
+    "wall_clock_s": 9.07
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18.jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 0,
+      "confidence": 0.85,
+      "diagnosis": "Healthy apple plant detected; no action required.",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 8766
+    },
+    "wall_clock_s": 8.75
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (1).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 1,
+      "confidence": 0.85,
+      "diagnosis": "Disease symptoms detected on apple; pump treatment recommended.",
+      "action": 1,
+      "severity": 2,
+      "inference_time_ms": 8984
+    },
+    "wall_clock_s": 8.99
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (2).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 2,
+      "confidence": 0.85,
+      "diagnosis": "Unwanted weed detected; laser elimination recommended.",
+      "action": 2,
+      "severity": 0,
+      "inference_time_ms": 8984
+    },
+    "wall_clock_s": 8.98
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (3).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 0,
+      "confidence": 0.85,
+      "diagnosis": "Healthy apple plant detected; no action required.",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 9594
+    },
+    "wall_clock_s": 9.6
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (4).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 0,
+      "confidence": 0.85,
+      "diagnosis": "Healthy apple plant detected; no action required.",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 10094
+    },
+    "wall_clock_s": 10.08
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19.jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "OK",
+    "vlm_result": {
+      "status": 1,
+      "confidence": 0.85,
+      "diagnosis": "Disease symptoms detected on apple; pump treatment recommended.",
+      "action": 1,
+      "severity": 2,
+      "inference_time_ms": 17812
+    },
+    "wall_clock_s": 17.82
+  }
+]

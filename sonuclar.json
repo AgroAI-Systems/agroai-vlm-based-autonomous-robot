@@ -1,0 +1,146 @@
+[
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (1).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 14641
+    },
+    "wall_clock_s": 14.64
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (2).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 14547
+    },
+    "wall_clock_s": 14.54
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18 (3).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 13000
+    },
+    "wall_clock_s": 13.0
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.18.jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 12234
+    },
+    "wall_clock_s": 12.24
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (1).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 14906
+    },
+    "wall_clock_s": 14.91
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (2).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 29797
+    },
+    "wall_clock_s": 29.8
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (3).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 15031
+    },
+    "wall_clock_s": 15.03
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19 (4).jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 13969
+    },
+    "wall_clock_s": 13.98
+  },
+  {
+    "file": "WhatsApp Image 2026-06-02 at 13.41.19.jpeg",
+    "yolo_class": "UNKNOWN",
+    "yolo_confidence": 0.0,
+    "bypass_triggered": false,
+    "parse_status": "ERR_PARSE",
+    "vlm_result": {
+      "status": 3,
+      "confidence": 0.0,
+      "diagnosis": "parse_error: no_json_found",
+      "action": 0,
+      "severity": 0,
+      "inference_time_ms": 15141
+    },
+    "wall_clock_s": 15.14
+  }
+]
