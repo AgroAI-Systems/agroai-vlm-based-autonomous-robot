@@ -1,9 +1,0 @@
-# MOD-02 + MOD-03 Pi 4 gereksinimleri
-# Kurulum: pip install -r requirements_pi.txt
-
-transformers==4.44.2
-torch
-torchvision
-pillow>=10.0.0
-einops>=0.7.0
-ultralytics>=8.0.0
