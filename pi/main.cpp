@@ -1,3 +1,30 @@
+// =====================================================================
+//  MODUL 4 — ANA KONTROL SISTEMI (ORKESTRATOR)  +  Arduino entegrasyonu
+// =====================================================================
+//  Tam akis:
+//    [Arduino]  cizgi takip eder -> SOL sensor siyah bandi okur -> DURUR
+//               -> seri porttan "MARKER" gonderir
+//    [Pi/main]  "MARKER" gorunce robot_server.py'yi tetikler:
+//               kamera -> YOLO -> bypass gate -> SmolVLM-256M -> karar JSON
+//               karara gore Arduino'ya LASER_ON/PUMP_ON gonderir
+//               sonra "RESUME" gonderir
+//    [Arduino]  RESUME alinca sonraki siyah banda kadar takibe devam eder
+//
+//  Iki haberlesme kanali:
+//    1) Arduino  <-- seri (/dev/ttyUSB0, 9600) -->  main      (MARKER/RESUME/LASER/PUMP)
+//    2) main     <-- unix socket (/tmp/robot_ipc.sock) -->  robot_server.py (CAPTURE/karar)
+//
+//  Calistirma:
+//    Terminal 1:  source ~/agroai-env/bin/activate && python3 src/robot_server.py
+//    Terminal 2:  ./pi/main                 (varsayilan port /dev/ttyUSB0)
+//                 ./pi/main /dev/ttyUSB1     (port override)
+//    Veya tek komut: ./run_robot.sh
+//
+//  Donanim yoksa (seri port acilamazsa) DEMO modu: [Enter] = MARKER simule eder.
+//
+//  CSE396 Group 9
+// =====================================================================
+
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -6,151 +33,241 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <errno.h>
 
 using namespace std;
 
+static const char* ROBOT_SOCKET  = "/tmp/robot_ipc.sock";
+static const char* DEFAULT_PORT  = "/dev/ttyUSB0";
+
 // =====================================================================
-// 1. DONANIM YÖNETİCİSİ (HARDWARE MANAGER)
+// 1. DONANIM / ARDUINO SERI YONETICISI (cift yonlu)
 // =====================================================================
-class HardwareManager {
-    int serial_fd;
+class ArduinoLink {
+    int fd;
+    string rxbuf;                 // satir biriktirme tamponu
 public:
-    HardwareManager(const char* port = "/dev/ttyUSB0") {
-        serial_fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
-        if (serial_fd < 0) {
-            cerr << "[Donanim] UYARI: " << port << " bulunamadi. Demo modunda calisiliyor." << endl;
+    ArduinoLink(const char* port) {
+        fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (fd < 0) {
+            cerr << "[Donanim] UYARI: " << port
+                 << " acilamadi (" << strerror(errno) << "). DEMO modu.\n";
             return;
         }
         termios tty{};
-        tcgetattr(serial_fd, &tty);
+        tcgetattr(fd, &tty);
         cfsetospeed(&tty, B9600); cfsetispeed(&tty, B9600);
         tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
-        tty.c_cflag |= (CLOCAL | CREAD); tty.c_cflag &= ~(PARENB | CSTOPB | CRTSCTS);
-        tcsetattr(serial_fd, TCSANOW, &tty);
-        usleep(2000000); tcflush(serial_fd, TCIOFLUSH);
-        cout << "[Donanim] Arduino baglantisi BASARILI" << endl;
+        tty.c_cflag |= (CLOCAL | CREAD);
+        tty.c_cflag &= ~(PARENB | CSTOPB | CRTSCTS);
+        tty.c_lflag = 0;                       // raw mode
+        tty.c_iflag &= ~(IXON | IXOFF | IXANY | ICRNL);
+        tty.c_oflag = 0;
+        tty.c_cc[VMIN] = 0; tty.c_cc[VTIME] = 0;  // non-blocking read
+        tcsetattr(fd, TCSANOW, &tty);
+
+        usleep(2000000);                       // Arduino DTR reset bekle
+        tcflush(fd, TCIOFLUSH);
+        cout << "[Donanim] Arduino baglantisi BASARILI (" << port << ")\n";
     }
-    ~HardwareManager() { if (serial_fd >= 0) close(serial_fd); }
-    void sendCommand(const string& cmd) {
-        if (serial_fd >= 0) { string msg = cmd + "\n"; write(serial_fd, msg.c_str(), msg.size()); cout << "[Donanim] Iletildi: " << cmd << endl; } 
-        else { cout << "[Donanim] SIMULASYON: " << cmd << endl; }
+    ~ArduinoLink() { if (fd >= 0) close(fd); }
+
+    bool connected() const { return fd >= 0; }
+
+    void sendLine(const string& cmd) {
+        if (fd < 0) { cout << "[Donanim] SIMULASYON: " << cmd << "\n"; return; }
+        string msg = cmd + "\n";
+        ssize_t w = write(fd, msg.c_str(), msg.size());
+        (void)w;
+        cout << "[Donanim] -> Arduino: " << cmd << "\n";
     }
-    void activateLaser(int ms) { sendCommand("LASER_ON " + to_string(ms)); }
-    void deactivateLaser() { sendCommand("LASER_OFF"); }
-    void activatePump(int ms) { sendCommand("PUMP_ON " + to_string(ms)); }
-    void deactivatePump() { sendCommand("PUMP_OFF"); }
+
+    // Tamponlanmis satir okuma. Tam bir satir varsa true + out doldurur.
+    bool readLine(string& out) {
+        // Once mevcut tamponda satir var mi?
+        size_t nl = rxbuf.find('\n');
+        if (nl == string::npos && fd >= 0) {
+            char buf[256];
+            ssize_t n = read(fd, buf, sizeof(buf));
+            if (n > 0) rxbuf.append(buf, n);
+            nl = rxbuf.find('\n');
+        }
+        if (nl == string::npos) return false;
+
+        out = rxbuf.substr(0, nl);
+        rxbuf.erase(0, nl + 1);
+        // satir sonu \r temizle
+        while (!out.empty() && (out.back() == '\r' || out.back() == ' '))
+            out.pop_back();
+        return true;
+    }
+
+    // Belirli bir token iceren satiri timeout_ms sureyle bekle.
+    bool waitFor(const string& token, int timeout_ms) {
+        if (fd < 0) return false;
+        int waited = 0;
+        string line;
+        while (waited < timeout_ms) {
+            if (readLine(line)) {
+                if (line.find(token) != string::npos) return true;
+            } else {
+                usleep(10000); waited += 10;   // 10 ms
+            }
+        }
+        return false;
+    }
+
+    // --- yuksek seviye aktuator komutlari ---
+    void activateLaser(int ms)  { sendLine("LASER_ON " + to_string(ms)); }
+    void deactivateLaser()      { sendLine("LASER_OFF"); }
+    void activatePump(int ms)   { sendLine("PUMP_ON " + to_string(ms)); }
+    void deactivatePump()       { sendLine("PUMP_OFF"); }
+    void resume()               { sendLine("RESUME"); }
 };
 
 // =====================================================================
-// 2. KAMERA (YOLO) İLETİŞİM FONKSİYONU
+// 2. BASIT JSON DEGER OKUYUCU (string + sayisal)
 // =====================================================================
-string takePhoto() {
-    string socketPath = "/tmp/kamera_ipc.sock";
-    int sock = 0;
-    struct sockaddr_un serv_addr;
-    char buffer[1024] = {0};
-
-    if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) return "";
-    serv_addr.sun_family = AF_UNIX;
-    strncpy(serv_addr.sun_path, socketPath.c_str(), sizeof(serv_addr.sun_path) - 1);
-
-    cout << "[C++] Kamera sunucusuna baglaniliyor..." << endl;
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        cerr << "[C++] HATA: Kamera baglantisi basarisiz! (kamera_server.py calisiyor mu?)" << endl;
-        close(sock);
-        return "";
+static string jsonValue(const string& json, const string& key) {
+    string needle = "\"" + key + "\"";
+    size_t k = json.find(needle);
+    if (k == string::npos) return "";
+    size_t colon = json.find(':', k + needle.size());
+    if (colon == string::npos) return "";
+    size_t i = colon + 1;
+    while (i < json.size() && (json[i] == ' ' || json[i] == '\t')) i++;
+    if (i < json.size() && json[i] == '"') {
+        size_t end = json.find('"', i + 1);
+        if (end == string::npos) return "";
+        return json.substr(i + 1, end - (i + 1));
     }
-
-    // Kamera sunucusuna "CAPTURE" emrini fırlatıyoruz
-    string cmd = "CAPTURE";
-    send(sock, cmd.c_str(), cmd.length(), 0);
-
-    // Kırpılmış fotoğrafın dosya yolunu bekliyoruz
-    int valread = read(sock, buffer, 1024);
-    string response = "";
-    if (valread > 0) {
-        response = string(buffer, valread);
-        cout << "[C++] Kamera ve YOLO isini bitirdi. Kesilmis Fotograf Yolu: " << response << endl;
-    }
-    close(sock);
-    return response;
+    size_t end = i;
+    while (end < json.size() && json[end] != ',' && json[end] != '}') end++;
+    string v = json.substr(i, end - i);
+    while (!v.empty() && (v.back()==' '||v.back()=='\n'||v.back()=='\r')) v.pop_back();
+    return v;
 }
 
 // =====================================================================
-// 3. VLM (YAPAY ZEKA) İLETİŞİM FONKSİYONU
+// 3. BIRLESIK VISION SUNUCUSU CAGRISI (kamera + YOLO + VLM)
 // =====================================================================
-string triggerVLM(const string& imagePath) {
-    string socketPath = "/tmp/vlm_ipc.sock";
-    int sock = 0;
-    struct sockaddr_un serv_addr;
-    char buffer[2048] = {0};
-
-    if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) return "";
-    serv_addr.sun_family = AF_UNIX;
-    strncpy(serv_addr.sun_path, socketPath.c_str(), sizeof(serv_addr.sun_path) - 1);
-
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        cerr << "[C++] HATA: VLM baglantisi basarisiz! (vlm_server.py calisiyor mu?)" << endl;
+string analyzeScene() {
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return "";
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, ROBOT_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        cerr << "[C++] HATA: vision sunucusuna baglanilamadi "
+             << "(robot_server.py calisiyor mu?)\n";
         close(sock);
         return "";
     }
-
-    cout << "[C++] VLM uyariliyor. Hedef: " << imagePath << endl;
-    send(sock, imagePath.c_str(), imagePath.length(), 0);
-
-    int valread = read(sock, buffer, 2048);
-    string response = "";
-    if (valread > 0) {
-        response = string(buffer, valread);
-    }
+    const string cmd = "CAPTURE";
+    send(sock, cmd.c_str(), cmd.size(), 0);
+    char buffer[4096] = {0};
+    int n = read(sock, buffer, sizeof(buffer) - 1);
     close(sock);
-    return response;
+    if (n <= 0) return "";
+    return string(buffer, n);
 }
 
 // =====================================================================
-// 4. ANA ORKESTRATÖR (MODÜL 4)
+// 4. BIR ISTASYONU DEGERLENDIR  (MARKER -> inspect -> act -> RESUME)
 // =====================================================================
-int main() {
-    cout << "=========================================" << endl;
-    cout << "   MODUL 4: ANA KONTROL SISTEMI BASLADI  " << endl;
-    cout << "=========================================\n" << endl;
+void processStation(ArduinoLink& arduino, int station) {
+    cout << "\n========== ISTASYON #" << station << " ==========\n";
+    cout << "[Sistem] Bant algilandi, robot durdu. Kamera+YOLO+VLM tetikleniyor...\n";
+    // Not: 2 sn'lik stabilizasyon beklemesi Arduino tarafinda (MARKER gonderilmeden
+    // once delay(2000)); MARKER bize ulastiginda robot zaten oturmus oluyor.
 
-    HardwareManager hardware("/dev/ttyUSB0");
+    string json = analyzeScene();
+    if (json.empty()) {
+        cerr << "[Sistem] Karar alinamadi — guvenli gecis (skip).\n";
+        arduino.resume();
+        return;
+    }
 
-    cout << "\n[Sistem] Bitki karsisinda duruldu. Ajan (Kamera+YOLO) tetikleniyor..." << endl;
-    
-    // 1. ADIM: Kamerayı tetikle ve kırpılmış yaprağın yolunu al
-    string croppedImagePath = takePhoto(); 
-    
-    if (!croppedImagePath.empty()) {
-        cout << "\n[Sistem] Ajan isini bitirdi. Doktor (VLM) analize cagiriliyor..." << endl;
-        
-        // 2. ADIM: O kırpılmış yaprağın yolunu VLM'e gönder
-        string vlmResult = triggerVLM(croppedImagePath); 
+    string status = jsonValue(json, "status");
+    string action = jsonValue(json, "action");
+    string conf   = jsonValue(json, "confidence");
+    string diag   = jsonValue(json, "diagnosis");
 
-        if (!vlmResult.empty()) {
-            cout << "\n--- KARAR MOTORU DEVREDE ---" << endl;
-            cout << "VLM'den Gelen JSON:\n" << vlmResult << endl;
-            
-            // 3. ADIM: Donanımı Yönet (Lazer / Pompa)
-            if (vlmResult.find("\"action\": \"laser\"") != string::npos) {
-                cout << "-> Karar: Yabani Ot! Lazer Atesleniyor..." << endl;
-                hardware.activateLaser(3000);
-                sleep(3);
-                hardware.deactivateLaser();
-            } 
-            else if (vlmResult.find("\"action\": \"spray\"") != string::npos) {
-                cout << "-> Karar: Hastalikli Bitki! Ilaclama Baslatiliyor..." << endl;
-                hardware.activatePump(2000);
-                sleep(2);
-                hardware.deactivatePump();
-            } 
-            else if (vlmResult.find("\"action\": \"skip\"") != string::npos) {
-                cout << "-> Karar: Saglikli Bitki. Es geciliyor." << endl;
-            } 
-            cout << "----------------------------\n" << endl;
+    cout << "--- KARAR ---\n";
+    cout << "  Durum   : " << status << "   Guven: " << conf << "\n";
+    cout << "  Teshis  : " << diag   << "\n";
+    cout << "  Aksiyon : " << action << "\n";
+
+    if (action == "laser") {
+        cout << "  -> Yabani ot! Lazer atesleniyor (3s)...\n";
+        arduino.activateLaser(3000);
+        sleep(3);
+        arduino.deactivateLaser();
+    } else if (action == "spray") {
+        cout << "  -> Hastalikli bitki! Ilaclama (2s)...\n";
+        arduino.activatePump(2000);
+        sleep(2);
+        arduino.deactivatePump();
+    } else {
+        cout << "  -> Saglikli/belirsiz bitki. Mudahale yok.\n";
+    }
+
+    // Degerlendirme bitti: Arduino sonraki banda kadar takibe devam etsin
+    cout << "[Sistem] RESUME gonderiliyor — sonraki banda kadar takip.\n";
+    arduino.resume();
+    cout << "=====================================\n";
+}
+
+// =====================================================================
+// 5. ANA DONGU
+// =====================================================================
+int main(int argc, char* argv[]) {
+    const char* port = (argc > 1) ? argv[1] : DEFAULT_PORT;
+
+    cout << "=========================================\n";
+    cout << "   MODUL 4: ANA KONTROL SISTEMI BASLADI  \n";
+    cout << "=========================================\n";
+
+    ArduinoLink arduino(port);
+    int station = 0;
+
+    if (arduino.connected()) {
+        // Arduino "READY" satirini gondermis olabilir — yutalim (zorunlu degil)
+        arduino.waitFor("READY", 3000);
+
+        // Baslangic sinyali: robot acilista WAITING'de durur, teker donmez.
+        // Kullanici hazir olunca Enter'a basinca "START" gonderiyoruz.
+        cout << "\n[Sistem] Robot hazir, bekliyor. Baslatmak icin ENTER'a bas...";
+        cout.flush();
+        { string dummy; getline(cin, dummy); }
+        arduino.sendLine("START");
+
+        cout << "[Sistem] Cizgi takibi basladi. Bant (MARKER) bekleniyor...\n"
+             << "         (Cikis: Ctrl+C)\n";
+
+        string line;
+        while (true) {
+            if (arduino.readLine(line)) {
+                if (line.find("MARKER") != string::npos) {
+                    processStation(arduino, ++station);
+                }
+                // diger satirlar (ACK/RESUMED/sensor debug) yok sayilir
+            } else {
+                usleep(10000);  // 10 ms — CPU'yu yorma
+            }
+        }
+    } else {
+        // ---- DEMO MODU (Arduino yok): Enter ile MARKER simule et ----
+        cout << "\n[DEMO] Arduino yok. [Enter] = istasyon simule et, q = cikis\n";
+        string in;
+        while (true) {
+            cout << "> " << flush;
+            if (!getline(cin, in)) break;
+            if (in == "q" || in == "Q") break;
+            processStation(arduino, ++station);
         }
     }
 
+    cout << "\n[Sistem] Kapandi.\n";
     return 0;
 }

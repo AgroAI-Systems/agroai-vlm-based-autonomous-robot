@@ -1,14 +1,14 @@
 """
-vlm_engine.py — MOD-03 (VLM) MoondreamV2 Inference Engine
+vlm_engine.py — MOD-03 (VLM) SmolVLM-256M Inference Engine
 
 Bu dosya Umut Akman'ın sorumluluk alanıdır:
-  - MoondreamV2 INT4 model yükleme / kapatma
-  - Prompt mühendisliği (yapılandırılmış JSON çıktı talebi)
+  - SmolVLM-256M-Instruct model yükleme / kapatma
+  - Prompt mühendisliği (tek kelime çıktı talebi)
   - Pi 4'e uyarlanmış inference çağrısı ve timeout yönetimi
   - Bekir'in vlm_parser.py'siyle entegrasyon (vlm_analyze_plant)
 
 Veri akışı:
-  MOD-02 (VlmImage) → vlm_analyze_plant() → [run_moondream_inference + parse_vlm_output] → VlmResult → MOD-04
+  MOD-02 (VlmImage) → vlm_analyze_plant() → [run_smolvlm_inference + parse_vlm_output] → VlmResult → MOD-04
 
 Geliştirici: Umut Akman (250104004997)
 Modül Partneri (Parser): Bekir Göktepe (220104004018)
@@ -18,8 +18,8 @@ Bağımlılıklar (Pi 4'e kur):
     pip install transformers torch pillow einops
 
 Model:
-    vikhyatk/moondream2 (HuggingFace) — ~3.85 GB safetensors, INT4 yok ama
-    PyTorch CPU üzerinde Pi 4'te de çalışır (yavaş: 60-120 sn / inference).
+    HuggingFaceTB/SmolVLM-256M-Instruct (HuggingFace) — ~500 MB safetensors.
+    PyTorch CPU üzerinde Pi 4'te çalışır.
     İlk vlm_init() çağrısında otomatik HuggingFace cache'ine iner.
 """
 
@@ -119,28 +119,25 @@ _CONF_NOISY: float  = 0.60
 # Pi 4'te inference 20–45 s sürer, termal throttle altında 90 s'ye çıkabilir.
 # Eğer mod3.h güncellenirse bu sabiti de güncelle.
 
-VLM_TIMEOUT_MS: int = 75_000  # 75 saniye — Pi 4 + termal headroom
+VLM_TIMEOUT_MS: int = 15_000  # 15 saniye — timeout olursa YOLO fallback devreye girer
 
 # Modelin beklediği kare boyutu (mod3.h VLM_CROP_SIZE ile uyumlu)
-VLM_CROP_SIZE: int = 378  # px
+VLM_CROP_SIZE: int = 224  # px
 
 # ---------------------------------------------------------------------------
 # Global model state (singleton)
 # ---------------------------------------------------------------------------
-# transformers AutoModel yüklemesi ilk seferde ~3.85 GB indirir, sonraki
-# çağrılarda HF cache'inden gelir. ~4-8 saniye yüklenir, ~4 GB RAM kullanır.
+# SmolVLM-256M: ~500 MB disk, ~1.0 GB RAM, timeout=15s → YOLO fallback
 
 _model = None          # transformers model
-_tokenizer = None      # transformers tokenizer
+_processor = None      # AutoProcessor (SmolVLM)
+_tokenizer = None      # alias — backward compat icin
 _model_lock = threading.Lock()
 _is_initialized: bool = False
 
-# HuggingFace model repo + revision (deterministik build için pin)
-HF_MODEL_ID: str = "vikhyatk/moondream2"
-HF_REVISION: str = "2024-08-26"   # pyvips bağımlılığı olmayan son stabil revision
-                                  # (sonraki revizyonlar libvips DLL gerektirir
-                                  # ve Windows'ta sıkıntılıdır; ileride Pi 4'te
-                                  # güncellenebilir)
+# HuggingFace model repo
+HF_MODEL_ID: str = "HuggingFaceTB/SmolVLM-256M-Instruct"
+HF_REVISION: str = None   # latest
 
 
 # ---------------------------------------------------------------------------
@@ -151,12 +148,12 @@ def vlm_init(model_path: str = HF_MODEL_ID, verbose_logging: bool = False) -> Vl
     """
     mod3.h: vlm_status_t vlm_init(const vlm_config_t *config)
 
-    MoondreamV2 modelini belleğe yükler. Uygulama başında bir kez çağrılır.
+    SmolVLM-256M modelini belleğe yükler. Uygulama başında bir kez çağrılır.
 
     Args:
         model_path:      HuggingFace model repo ID veya yerel cache yolu.
-                         Default: "vikhyatk/moondream2" — ilk seferde
-                         ~/.cache/huggingface/hub altına indirir (3.85 GB).
+                         Default: "HuggingFaceTB/SmolVLM-256M-Instruct" — ilk seferde
+                         ~/.cache/huggingface/hub altına indirir (~500 MB).
                          Pi 4'te de aynı path; bir kez indirip git'e
                          koyma, HuggingFace cache'i kullan.
         verbose_logging: True ise DEBUG seviyesi log aktif olur.
@@ -166,7 +163,7 @@ def vlm_init(model_path: str = HF_MODEL_ID, verbose_logging: bool = False) -> Vl
         VlmStatus.ERR_INIT       — yükleme başarısız (paket/internet vb.)
         VlmStatus.ERR_MEMORY     — bellek yetersiz
     """
-    global _model, _tokenizer, _is_initialized
+    global _model, _processor, _tokenizer, _is_initialized
 
     if verbose_logging:
         logging.getLogger("vlm").setLevel(logging.DEBUG)
@@ -176,22 +173,37 @@ def vlm_init(model_path: str = HF_MODEL_ID, verbose_logging: bool = False) -> Vl
             log.debug("vlm_init: already initialized, skipping.")
             return VlmStatus.OK
 
-        log.info(f"vlm_init: loading {model_path} "
-                 f"(prompt_version={PROMPT_VERSION}, revision={HF_REVISION})")
+        log.info(f"vlm_init: loading {model_path} (SmolVLM-256M)")
 
         try:
-            # Geç import — transformers/torch ağır, bağımlı kodu lazy tut
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from transformers import AutoProcessor, AutoModelForVision2Seq
 
-            _tokenizer = AutoTokenizer.from_pretrained(
-                model_path, revision=HF_REVISION, trust_remote_code=True,
-            )
-            _model = AutoModelForCausalLM.from_pretrained(
-                model_path, revision=HF_REVISION, trust_remote_code=True,
+            _processor = AutoProcessor.from_pretrained(model_path)
+            _model = AutoModelForVision2Seq.from_pretrained(
+                model_path, low_cpu_mem_usage=True,
             )
             _model.eval()
+
+            # INT8 dynamic quantization — text decoder'ı hedef al.
+            # SmolVLM'in vision encoder'ı (SigLIP) quantize_dynamic'i full-model
+            # modunda reddediyor; text_model alt bileşeni standart Llama-based.
+            import torch as _torch
+            try:
+                log.info("vlm_init: applying INT8 dynamic quantization (text model only)...")
+                _text_model = getattr(getattr(_model, "model", None), "text_model", None)
+                if _text_model is not None:
+                    _model.model.text_model = _torch.quantization.quantize_dynamic(
+                        _text_model, {_torch.nn.Linear}, dtype=_torch.qint8,
+                    )
+                    log.info("vlm_init: text model INT8 quantization done.")
+                else:
+                    log.warning("vlm_init: text_model subcomponent not found — skipping INT8")
+            except Exception as _qe:
+                log.warning(f"vlm_init: quantize_dynamic failed ({_qe}) — continuing without INT8")
+
+            _tokenizer = _processor  # backward compat
             _is_initialized = True
-            log.info("vlm_init: MoondreamV2 loaded successfully.")
+            log.info("vlm_init: SmolVLM-256M loaded successfully.")
             return VlmStatus.OK
 
         except ImportError as exc:
@@ -202,7 +214,7 @@ def vlm_init(model_path: str = HF_MODEL_ID, verbose_logging: bool = False) -> Vl
             return VlmStatus.ERR_INIT
 
         except MemoryError:
-            log.error("vlm_init: not enough memory to load model (~4 GB required)")
+            log.error("vlm_init: not enough memory to load model (~1 GB required)")
             return VlmStatus.ERR_MEMORY
 
         except Exception as exc:
@@ -217,15 +229,16 @@ def vlm_shutdown() -> None:
     Model belleğini serbest bırakır. Uygulama kapanırken çağrılır.
     Pi 4'te RAM kıymetli — temiz kapatma önemli.
     """
-    global _model, _tokenizer, _is_initialized
+    global _model, _processor, _tokenizer, _is_initialized
 
     with _model_lock:
         if not _is_initialized:
             return
         try:
             del _model
-            del _tokenizer
+            del _processor
             _model = None
+            _processor = None
             _tokenizer = None
             _is_initialized = False
             log.info("vlm_shutdown: model unloaded.")
@@ -240,7 +253,7 @@ def vlm_analyze_plant(image: VlmImage) -> tuple[VlmStatus, VlmResult]:
     Ana public API. MOD-04 bu fonksiyonu çağırır.
 
     Pipeline:
-        VlmImage → PIL Image → MoondreamV2 → ham metin → parse_vlm_output → VlmResult
+        VlmImage → PIL Image → SmolVLM-256M → ham metin → parse_vlm_output → VlmResult
 
     Args:
         image: MOD-02'den gelen ROI frame (VlmImage dataclass).
@@ -276,7 +289,7 @@ def vlm_analyze_plant(image: VlmImage) -> tuple[VlmStatus, VlmResult]:
         )
         log.info(
             f"YOLO bypass: class_id={image.yolo_class_id} {reason} "
-            f"— skipping VLM inference (saved ~20-45 s on Pi 4)"
+            f"— skipping VLM inference"
         )
         return VlmStatus.OK, _synthesize_from_yolo(
             image.yolo_class_id, image.yolo_confidence
@@ -288,7 +301,7 @@ def vlm_analyze_plant(image: VlmImage) -> tuple[VlmStatus, VlmResult]:
         log.info(
             f"VLM invoked: yolo_class_id={image.yolo_class_id} "
             f"conf={image.yolo_confidence:.2f} < {YOLO_VLM_TRIGGER_THRESHOLD} "
-            f"— requesting second opinion from MoondreamV2"
+            f"— requesting second opinion from SmolVLM"
         )
     else:
         log.info(
@@ -303,15 +316,27 @@ def vlm_analyze_plant(image: VlmImage) -> tuple[VlmStatus, VlmResult]:
         log.error(f"vlm_analyze_plant: image conversion failed: {exc}")
         return VlmStatus.ERR_INVALID_INPUT, _emergency_result("image_conversion_failed")
 
-    # Inference
-    raw_text, elapsed_ms = run_moondream_inference(pil_image, ACTIVE_PROMPT)
+    # Inference (15s timeout)
+    raw_text, elapsed_ms = run_smolvlm_inference(pil_image, ACTIVE_PROMPT)
 
     # Ham metnin bellekten düşmesi için erken temizle (Pi 4 RAM)
     pil_image = None  # noqa: F841
 
+    # Timeout veya inference hatası — YOLO verisi varsa onu kullan
+    if not raw_text:
+        if image.yolo_class_id in YOLO_TO_PLANT_STATUS:
+            log.warning(
+                f"vlm_analyze_plant: timeout/error after {elapsed_ms} ms "
+                f"— falling back to YOLO result (class_id={image.yolo_class_id}, "
+                f"conf={image.yolo_confidence:.2f})"
+            )
+            return VlmStatus.OK, _synthesize_from_yolo(image.yolo_class_id, image.yolo_confidence)
+        log.warning(
+            f"vlm_analyze_plant: timeout/error after {elapsed_ms} ms, no YOLO data — unknown"
+        )
+        return VlmStatus.ERR_TIMEOUT, _emergency_result("vlm_timeout_no_yolo_fallback")
+
     # Umut yaklaşımı: ham tek kelime cevabı, deterministik JSON'a çevir
-    # (model JSON üretmiyor — STATUS_MAP ile biz üretiyoruz).
-    # Sonra parser çağrılır — defense-in-depth pipeline'ı korunur.
     synthetic_json = _classify_raw_to_json(raw_text)
 
     # Parser'a devret (Bekir'in katmanı, doğrulama + güvenli default)
@@ -330,18 +355,15 @@ def vlm_analyze_plant(image: VlmImage) -> tuple[VlmStatus, VlmResult]:
 # Core Inference — Umut'un ana fonksiyonu
 # ---------------------------------------------------------------------------
 
-def run_moondream_inference(
+def run_smolvlm_inference(
     pil_image: Image.Image,
     prompt: str,
 ) -> tuple[str, int]:
     """
-    MoondreamV2'ye görüntü + prompt göndererek ham metin alır.
-
-    Bu fonksiyon Bekir'in parse_vlm_output'u tarafından tüketilir.
-    İmzayı değiştirme — parser kontratı buna göre kurulmuştur.
+    SmolVLM-256M'e görüntü + prompt göndererek ham metin alır.
 
     Args:
-        pil_image: PIL Image objesi (RGB, 378×378 tercih edilir).
+        pil_image: PIL Image objesi (RGB).
         prompt:    Modele gönderilecek soru/talimat.
 
     Returns:
@@ -357,11 +379,22 @@ def run_moondream_inference(
 
     def _inference_worker():
         try:
-            # transformers + vikhyatk/moondream2 API:
-            #   enc = model.encode_image(pil_image)
-            #   answer = model.answer_question(enc, question, tokenizer)
-            enc_image = _model.encode_image(pil_image)
-            answer = _model.answer_question(enc_image, prompt, _tokenizer)
+            import torch
+            _pil = pil_image  # local ref — del after encoding to free PIL memory
+            messages = [{"role": "user", "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ]}]
+            text = _processor.apply_chat_template(messages, add_generation_prompt=True)
+            inputs = _processor(text=text, images=[_pil], return_tensors="pt")
+            del _pil  # PIL pixels already encoded into tensors — free immediately
+            with torch.no_grad():
+                out_ids = _model.generate(
+                    **inputs, max_new_tokens=5, do_sample=False,
+                )
+            # sadece yeni token'ları decode et
+            new_ids = out_ids[0][inputs["input_ids"].shape[1]:]
+            answer = _processor.decode(new_ids, skip_special_tokens=True).strip()
             result_holder[0] = answer if isinstance(answer, str) else ""
         except Exception as exc:
             error_holder[0] = exc
@@ -378,14 +411,14 @@ def run_moondream_inference(
     if thread.is_alive():
         # Timeout — thread hâlâ çalışıyor, daemon olduğu için process çıkışında temizlenir
         log.error(
-            f"run_moondream_inference: TIMEOUT after {elapsed_ms} ms "
+            f"run_smolvlm_inference: TIMEOUT after {elapsed_ms} ms "
             f"(limit={VLM_TIMEOUT_MS} ms) — returning empty string"
         )
         return "", elapsed_ms
 
     if error_holder[0] is not None:
         log.error(
-            f"run_moondream_inference: inference error after {elapsed_ms} ms: "
+            f"run_smolvlm_inference: inference error after {elapsed_ms} ms: "
             f"{error_holder[0]}"
         )
         return "", elapsed_ms
@@ -396,13 +429,13 @@ def run_moondream_inference(
     MAX_RAW_LEN = 4096
     if len(raw_text) > MAX_RAW_LEN:
         log.warning(
-            f"run_moondream_inference: output truncated "
+            f"run_smolvlm_inference: output truncated "
             f"({len(raw_text)} → {MAX_RAW_LEN} bytes)"
         )
         raw_text = raw_text[:MAX_RAW_LEN]
 
     log.debug(
-        f"run_moondream_inference: done in {elapsed_ms} ms, "
+        f"run_smolvlm_inference: done in {elapsed_ms} ms, "
         f"output_len={len(raw_text)}, prompt_version={PROMPT_VERSION}"
     )
 
@@ -453,7 +486,7 @@ def _vlm_image_to_pil(image: VlmImage) -> Image.Image:
     """
     VlmImage (raw RGB bytes) → PIL Image (RGB mode).
 
-    PIL, moondream kütüphanesinin beklediği formattır.
+    PIL, SmolVLM processor'ının beklediği formattır.
     Pillow 10+ ile uyumlu: frombytes düz row-major RGB buffer'ı bekler.
     Eğer stride width*3'ten büyükse (padding varsa) padding'i strip ederiz.
     """
@@ -474,7 +507,7 @@ def _vlm_image_to_pil(image: VlmImage) -> Image.Image:
         size=(image.width, image.height),
         data=buf,
     )
-    # MoondreamV2 RGB bekliyor — format güvencesi
+    # SmolVLM RGB bekliyor — format güvencesi
     if pil_img.mode != "RGB":
         pil_img = pil_img.convert("RGB")
     return pil_img

@@ -1,9 +1,30 @@
 # MOD-02 + MOD-03 Pi 4 gereksinimleri
-# Kurulum: pip install -r requirements_pi.txt
+#
+# KURULUM SIRASI:
+#
+# 1) Sistem paketleri (pip degil, apt ile - bir kez):
+#    sudo apt install -y python3-pip python3-venv libvips42
+#
+# 2) torch + torchvision - Pi 4 icin MUTLAKA CPU-only index kullan:
+#    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+#    NEDEN: PyPI'dan gelen build Jetson/sunucu icin derlenmis (BF16/SVE komutlari).
+#    Pi 4 Cortex-A72 bu komutlari desteklemiyor → "Illegal instruction" crash.
+#
+# 3) Geri kalan paketler (normal):
+#    pip install -r requirements_pi.txt
 
-transformers==4.44.2
-torch
-torchvision
+# VLM inference
+transformers>=4.46.0
 pillow>=10.0.0
 einops>=0.7.0
+
+# HuggingFace model format destegi
+accelerate>=0.26.0
+safetensors>=0.4.0
+
+# YOLO (MOD-02 + entegrasyon testi icin)
 ultralytics>=8.0.0
+
+# Test
+pytest>=8.0.0

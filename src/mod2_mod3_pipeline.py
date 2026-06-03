@@ -11,7 +11,7 @@ Akis:
       │                              │
       │             conf >= esik     ├──► direkt VlmResult (VLM atlanir)
       │             (WEED: her conf) │
-      │             conf < esik      └──► MoondreamV2 ──► VlmResult
+      │             conf < esik      └──► SmolVLM-256M ──► VlmResult
       ▼
     VlmResult (status / action / severity / diagnosis)
 
@@ -62,8 +62,8 @@ BESTPT_CLASS_NAMES = {0: "Purslane-semizotu", 1: "SCAB", 2: "healthy"}
 # HEALTHY (mod3 id=0) : 0.75
 # DISEASED (mod3 id=1): 0.75
 BYPASS_THRESHOLDS = {
-    0: 0.75,   # mod3 YOLO_CLASS_HEALTHY
-    1: 0.75,   # mod3 YOLO_CLASS_DISEASED
+    0: 0.0,    # mod3 YOLO_CLASS_HEALTHY  — 0.0 → her conf'ta bypass, VLM yok
+    1: 0.0,    # mod3 YOLO_CLASS_DISEASED — 0.0 → her conf'ta bypass, VLM yok
     2: 0.0,    # mod3 YOLO_CLASS_WEED — her conf'ta bypass
 }
 
@@ -129,33 +129,37 @@ def load_yolo(model_path: str):
     return model
 
 
-def yolo_detect(yolo_model, image_path: str) -> tuple[int, float, str]:
+def yolo_detect(yolo_model, image_path: str) -> tuple[int, float, str, tuple | None]:
     """
     Goruntu uzerinde YOLO calistir.
 
     Returns:
-        (mod3_class_id, confidence, yolo_class_name)
-        Tespit yoksa: (-1, 0.0, 'no_detection')
+        (mod3_class_id, confidence, yolo_class_name, bbox_xyxy)
+        bbox_xyxy: (x1, y1, x2, y2) piksel koordinatlari, tespit yoksa None
     """
     results = yolo_model(image_path, verbose=False, conf=YOLO_DETECT_MIN_CONF)
     boxes = results[0].boxes
 
     if not len(boxes):
-        return -1, 0.0, "no_detection"
+        return -1, 0.0, "no_detection", None
 
     # En yuksek confidence'li tespiti sec
     best_conf = -1.0
     best_cls  = -1
+    best_box  = None
     for box in boxes:
         conf = float(box.conf)
         cls  = int(box.cls)
         if conf > best_conf:
             best_conf = conf
             best_cls  = cls
+            best_box  = box
 
     yolo_name = BESTPT_CLASS_NAMES.get(best_cls, "unknown")
     mod3_id   = BESTPT_TO_MOD3_CLASS.get(best_cls, -1)
-    return mod3_id, best_conf, yolo_name
+    x1, y1, x2, y2 = best_box.xyxy[0].tolist()
+    bbox = (int(x1), int(y1), int(x2), int(y2))
+    return mod3_id, best_conf, yolo_name, bbox
 
 
 def load_vlm_engine():
@@ -163,12 +167,12 @@ def load_vlm_engine():
     sys.path.insert(0, str(Path(__file__).parent / "vlm"))
     from vlm_engine import vlm_init, VlmStatus
     log = logging.getLogger("pipeline.vlm")
-    log.info("MoondreamV2 yukleniyor...")
+    log.info("SmolVLM-256M yukleniyor...")
     t0 = time.time()
     status = vlm_init()
     if status != VlmStatus.OK:
         raise RuntimeError(f"vlm_init basarisiz: {status.name}")
-    log.info(f"MoondreamV2 hazir ({time.time()-t0:.1f}s)")
+    log.info(f"SmolVLM-256M hazir ({time.time()-t0:.1f}s)")
 
 
 def run_pipeline_on_image(
@@ -192,7 +196,7 @@ def run_pipeline_on_image(
 
     # ── MOD-02: YOLO ────────────────────────────────────────────────────────
     t0 = time.time()
-    mod3_class_id, yolo_conf, yolo_name = yolo_detect(yolo_model, image_path)
+    mod3_class_id, yolo_conf, yolo_name, bbox = yolo_detect(yolo_model, image_path)
     yolo_ms = int((time.time() - t0) * 1000)
 
     if mod3_class_id == -1:
@@ -205,16 +209,31 @@ def run_pipeline_on_image(
             if bypass_threshold == 0.0 and mod3_class_id == 2
             else f"→ {'BYPASS' if will_bypass else 'VLM calisacak'} (esik={bypass_threshold})"
         )
-        print(f"    YOLO: {yolo_name} conf={yolo_conf:.2f}  {bypass_note}  [{yolo_ms}ms]")
+        bbox_str = f" bbox={bbox}" if bbox else ""
+        print(f"    YOLO: {yolo_name} conf={yolo_conf:.2f}  {bypass_note}  [{yolo_ms}ms]{bbox_str}")
 
     # ── MOD-02→MOD-03 köprüsü: VlmImage'a YOLO bilgisini yaz ──────────────
     from PIL import Image as PILImage
-    pil_img = PILImage.open(image_path).convert("RGB").resize((378, 378))
+    full_img = PILImage.open(image_path).convert("RGB")
+    if bbox is not None:
+        # YOLO tespiti varsa sadece o bölgeyi kirp, sonra 224x224'e yeniden boyutlandir
+        pil_img = full_img.crop(bbox).resize((224, 224))
+    else:
+        # Tespit yoksa tam goruntu
+        pil_img = full_img.resize((224, 224))
+
+    # Kırpılan/resize edilmiş görüntüyü kaydet (VLM'e giden tam olarak bu)
+    crops_dir = Path(__file__).parent / "vlm_crops"
+    crops_dir.mkdir(exist_ok=True)
+    crop_path = crops_dir / f"{Path(image_path).stem}_vlm_input.jpg"
+    pil_img.save(crop_path)
+    print(f"    VLM input kaydedildi: {crop_path.name}")
+
     vlm_image = VlmImage(
         data            = pil_img.tobytes(),
-        width           = 378,
-        height          = 378,
-        stride          = 378 * 3,
+        width           = 224,
+        height          = 224,
+        stride          = 224 * 3,
         timestamp_ms    = int(time.time() * 1000),
         yolo_class_id   = mod3_class_id,
         yolo_confidence = yolo_conf,
@@ -299,11 +318,149 @@ def print_summary(results: list[dict]) -> None:
     print()
 
 
+def run_camera_live(yolo, count: int, interval: float, no_vlm: bool) -> list:
+    """
+    Pi kamerası ile pipeline modu.
+
+    Kamera açma: camera_preview.py ile aynı yaklaşım —
+    create_preview_configuration + cam.start() (Qt preview yok).
+    Her `interval` saniyede bir kare capture_file() ile kaydedip
+    YOLO+VLM pipeline'ına verir.
+    Sonuçlar terminal + cv2 penceresi (display varsa) ile gösterilir.
+    'q' → çık, 's' → anında yakala, Ctrl+C → çık.
+    """
+    import cv2
+
+    log = logging.getLogger("pipeline.camera")
+    captures_dir = Path(__file__).parent / "camera_captures"
+    captures_dir.mkdir(exist_ok=True)
+
+    # Kamerayı aç — camera_preview.py ile aynı config
+    try:
+        from picamera2 import Picamera2
+        cam = Picamera2()
+        cam.configure(cam.create_preview_configuration(main={"size": (1280, 720)}))
+        cam.start()
+        time.sleep(0.5)  # exposure stabilizasyonu
+        log.info("picamera2 acildi (640x480)")
+    except Exception as exc:
+        log.error(f"Kamera acilamadi: {exc}")
+        return []
+
+    # cv2 penceresi — display yoksa hata verse de pipeline devam eder
+    show_window = False
+    try:
+        cv2.namedWindow("AgroAI - Pi Kamera", cv2.WINDOW_NORMAL)
+        show_window = True
+        print("\n[KAMERA] Pencere acildi. 'q'=cik  's'=simdi yakala")
+    except Exception:
+        print("\n[KAMERA] Display bulunamadi, sadece terminal ciktisi.")
+
+    def grab_bgr():
+        """capture_array() → BGR (cv2 uyumlu)"""
+        arr = cam.capture_array()
+        # create_preview_configuration varsayilan formati XBGR8888 (4 kanal)
+        if arr.ndim == 3 and arr.shape[2] == 4:
+            return cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
+        return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+
+    all_results = []
+    idx = 0
+    last_capture_t = time.time() - interval
+    overlay_text  = "Hazir"
+    overlay_color = (200, 200, 200)
+
+    try:
+        while True:
+            now = time.time()
+            key = cv2.waitKey(1) & 0xFF if show_window else 0xFF
+
+            should_capture = (
+                (now - last_capture_t >= interval) or key == ord('s')
+            ) and (count == 0 or idx < count)
+
+            if should_capture:
+                idx += 1
+                last_capture_t = now
+                cap_path = str(captures_dir / f"capture_{idx:04d}.jpg")
+
+                # Kareyi kaydet (camera_preview.py'deki gibi capture_file)
+                cam.capture_file(cap_path)
+                log.info(f"Kare kaydedildi: {cap_path}")
+
+                if show_window:
+                    frame = grab_bgr()
+                    disp = frame.copy()
+                    cv2.putText(disp, f"[{idx}] Isleniyor...", (10, 40),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 220, 255), 2)
+                    cv2.imshow("AgroAI - Pi Kamera", disp)
+                    cv2.waitKey(1)
+
+                try:
+                    r = run_pipeline_on_image(yolo, cap_path, idx, count or idx)
+                    all_results.append(r)
+                    status = r["plant_status"]
+                    overlay_text = (
+                        f"[{idx}] {status} | {r['action']} | "
+                        f"conf={r['confidence']:.2f} | {r['gate']}"
+                    )
+                    overlay_color = (
+                        (0, 200, 0)    if status == "HEALTHY"  else
+                        (0, 0, 220)    if status == "DISEASED" else
+                        (0, 140, 255)  if status == "WEED"     else
+                        (180, 180, 180)
+                    )
+                except Exception as exc:
+                    overlay_text = f"HATA: {exc}"
+                    overlay_color = (0, 0, 200)
+                    log.error(f"Pipeline hatasi: {exc}")
+
+                if count > 0 and idx >= count:
+                    time.sleep(2)
+                    break
+
+            # Canlı görüntü + overlay
+            if show_window:
+                frame = grab_bgr()
+                cv2.putText(frame, overlay_text, (10, 35),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, overlay_color, 2)
+                remaining = max(0.0, interval - (time.time() - last_capture_t))
+                cv2.putText(frame,
+                            f"Sonraki: {remaining:.1f}s  |  q=cik  s=simdi",
+                            (10, frame.shape[0] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1)
+                cv2.imshow("AgroAI - Pi Kamera", frame)
+                if key == ord('q'):
+                    print("[KAMERA] Kullanici cikti.")
+                    break
+            else:
+                # Display yok — interval kadar bekle
+                remaining = interval - (time.time() - last_capture_t)
+                if remaining > 0:
+                    time.sleep(min(remaining, 0.1))
+
+    except KeyboardInterrupt:
+        print("\n[KAMERA] Ctrl+C ile durduruldu.")
+    finally:
+        cam.stop()
+        cam.close()
+        if show_window:
+            cv2.destroyAllWindows()
+
+    return all_results
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="MOD-02 + MOD-03 entegrasyon testi")
-    ap.add_argument("--images", default=r"C:\Bekirrr\ceng\test_images",
+    ap.add_argument("--images", default=str(Path(__file__).parent / "test_images"),
                     help="Test goruntuleri klasoru")
-    ap.add_argument("--model", default=r"C:\Bekirrr\ceng\src\best.pt",
+    ap.add_argument("--camera", action="store_true",
+                    help="Pi kamerasından canlı görüntü al (--images yerine)")
+    ap.add_argument("--count", type=int, default=1,
+                    help="Kameradan kaç kare çek (varsayılan: 1, 0=sonsuz)")
+    ap.add_argument("--interval", type=float, default=2.0,
+                    help="Kareler arası bekleme süresi saniye (varsayılan: 2.0)")
+    ap.add_argument("--model", default=str(Path(__file__).parent / "best.pt"),
                     help="YOLO model dosyasi (best.pt)")
     ap.add_argument("--save-json", default=None,
                     help="Sonuclari JSON dosyasina kaydet")
@@ -316,22 +473,28 @@ def main() -> int:
     setup_logging(args.verbose)
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-    img_dir = Path(args.images)
-    if not img_dir.exists():
-        print(f"HATA: Goruntu klasoru bulunamadi: {img_dir}")
-        return 2
+    # Görüntü kaynağını belirle
+    if args.camera:
+        images = None  # kamera modunda dinamik olarak yakalanacak
+        total = args.count if args.count > 0 else None
+        print(f"Mod            : Pi Kamera ({'sonsuz' if total is None else total} kare, {args.interval}s aralik)")
+    else:
+        img_dir = Path(args.images)
+        if not img_dir.exists():
+            print(f"HATA: Goruntu klasoru bulunamadi: {img_dir}")
+            return 2
+        images = sorted(
+            p for p in img_dir.iterdir()
+            if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        )
+        if not images:
+            print(f"HATA: Klasorde goruntu yok: {img_dir}")
+            return 2
+        total = len(images)
+        print(f"Goruntu sayisi : {total}")
 
-    images = sorted(
-        p for p in img_dir.iterdir()
-        if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-    )
-    if not images:
-        print(f"HATA: Klasorde goruntu yok: {img_dir}")
-        return 2
-
-    print(f"Goruntu sayisi : {len(images)}")
     print(f"YOLO modeli   : {args.model}")
-    print(f"VLM            : {'ATLANACAK (--no-vlm)' if args.no_vlm else 'MoondreamV2'}")
+    print(f"VLM            : {'ATLANACAK (--no-vlm)' if args.no_vlm else 'SmolVLM-256M'}")
     print()
 
     # YOLO yukle
@@ -341,7 +504,6 @@ def main() -> int:
     if not args.no_vlm:
         load_vlm_engine()
     else:
-        # --no-vlm: tum esikleri 0.0 yap → her sey YOLO bypass olur, VLM hic calismaz
         sys.path.insert(0, str(Path(__file__).parent / "vlm"))
         import vlm_types as _vt
         for k in list(_vt.YOLO_VLM_THRESHOLDS.keys()):
@@ -349,15 +511,21 @@ def main() -> int:
         import vlm_engine as _eng
         _eng._is_initialized = True
         _eng._model = object()
+        _eng._processor = object()
 
     all_results = []
-    for idx, img_path in enumerate(images, 1):
-        try:
-            r = run_pipeline_on_image(yolo, str(img_path), idx, len(images))
-            all_results.append(r)
-        except Exception as exc:
-            print(f"    HATA: {exc}")
-            import traceback; traceback.print_exc()
+
+    if args.camera:
+        all_results = run_camera_live(yolo, args.count, args.interval, args.no_vlm)
+    else:
+        # Dosya modu
+        for idx, img_path in enumerate(images, 1):
+            try:
+                r = run_pipeline_on_image(yolo, str(img_path), idx, total)
+                all_results.append(r)
+            except Exception as exc:
+                print(f"    HATA: {exc}")
+                import traceback; traceback.print_exc()
 
     print_summary(all_results)
 

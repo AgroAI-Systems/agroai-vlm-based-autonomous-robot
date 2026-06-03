@@ -1,0 +1,9 @@
+{
+    "status": "diseased",
+    "confidence": 0.357,
+    "diagnosis": "yolo_bypass: class=DISEASED conf=0.36 (VLM not invoked)",
+    "action": "spray",
+    "severity": "medium",
+    "target_position": "center",
+    "inference_time_ms": 0
+}

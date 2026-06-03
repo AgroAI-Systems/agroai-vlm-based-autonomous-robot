@@ -179,6 +179,6 @@ YOLO_VLM_TRIGGER_THRESHOLD: float = 0.75  # Genel fallback (geriye dönük uyum)
 
 YOLO_VLM_THRESHOLDS: dict[int, float] = {
     YOLO_CLASS_WEED:     0.0,   # her conf'ta bypass — ot tespitine güven
-    YOLO_CLASS_HEALTHY:  0.75,  # yüksek conf'ta bypass, düşükte VLM
-    YOLO_CLASS_DISEASED: 0.75,  # yüksek conf'ta bypass, düşükte VLM
+    YOLO_CLASS_HEALTHY:  0.0,   # 0.0 → her conf'ta bypass, VLM asla calismaz
+    YOLO_CLASS_DISEASED: 0.0,   # 0.0 → her conf'ta bypass, VLM asla calismaz
 }
