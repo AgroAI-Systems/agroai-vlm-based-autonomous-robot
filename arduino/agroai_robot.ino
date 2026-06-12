@@ -38,14 +38,14 @@
 // ---- DONANIM (LAZER / POMPA) PINLERI ----
 // Bos dijital pinler. Roleyi/MOSFET'i baska pine baglarsan burayi guncelle.
 #define LASER_PIN 2
-#define PUMP_PIN  8
+#define PUMP_PIN  8   // 13 = onboard LED ile ayni, gorsel geri bildirim verir
 
 // Aktif seviye: rolelerin cogu LOW-tetikli. HIGH-tetikli ise true yap.
 #define ACTUATOR_ACTIVE_HIGH true
 
 // ---- HIZ AYARLARI ----
-#define SOL_MOTOR_HIZI 67
-#define SAG_MOTOR_HIZI 55
+#define SOL_MOTOR_HIZI 64
+#define SAG_MOTOR_HIZI 58
 #define HAFIF_ARTIS 8
 
 // ---- ISTASYON ISARETI (SIYAH BANT) POLARITESI ----
@@ -64,9 +64,13 @@
 #define MARKER_DEBOUNCE 3
 
 // ---- DURUM MAKINESI ----
-// WAITING: acilista burada bekler, motorlar KAPALI. "START" (veya "GO") sinyali
-//          gelene kadar cizgi takibine baslamaz (acar acmaz teker donmesin diye).
-enum RobotState { WAITING, FOLLOWING, AT_MARKER };
+// WAITING:   acilista burada bekler, motorlar KAPALI. "START"/"GO" gelene kadar
+//            cizgi takibine baslamaz (acar acmaz teker donmesin diye).
+// FOLLOWING: cizgi takibi + istasyon (marker) algilama.
+// AT_MARKER: istasyonda durup Pi'nin kararini (RESUME) bekler.
+// LEAVING:   RESUME sonrasi bandi gecer; sol sensor KESINTISIZ 3 sn beyaz gorene
+//            kadar yeni marker okumaz (ayni istasyonu tekrar okumayi onler).
+enum RobotState { WAITING, FOLLOWING, AT_MARKER, LEAVING };
 RobotState state = WAITING;
 
 // Ayni bant uzerinde tekrar tetiklenmeyi onlemek icin "silah" bayragi:
@@ -75,6 +79,11 @@ bool markerArmed = true;
 
 // Debounce sayaci: sol sensor ust uste kac kez bant gordu
 int markerCount = 0;
+
+// LEAVING: istasyon islendikten sonra robot bandi gecip sol sensor KESINTISIZ
+// bu kadar sure beyaz gorene kadar yeni MARKER okumaz.
+#define LEAVE_WHITE_MS 3000          // 3 sn kesintisiz beyaz
+unsigned long leaveWhiteStart = 0;   // beyazin baslama ani (0 = henuz beyaz yok)
 
 // DEBUG: "DEBUG_ON" komutuyla acilir, ham sensor degerlerini seri'ye yazar.
 // Kalibrasyon icin (MARKER_LEVEL'i bulmak, bant yerlesimini test etmek).
@@ -209,21 +218,13 @@ void handleCommand(char* cmd) {
     Serial.println("ACK PUMP_OFF");
   }
   else if (strncmp(cmd, "RESUME", 6) == 0) {
-    // Degerlendirme bitti: guvenlik icin aktuatorleri kapat.
+    // Degerlendirme bitti: guvenlik icin aktuatorleri kapat, takibe don.
     actuatorOff(LASER_PIN); actuatorOff(PUMP_PIN);
     laserOffAt = pumpOffAt = 0;
-
-    // Istasyon bandini FIZIKSEL olarak terk et: sol sensor beyaz (normal) gorene
-    // kadar duz ileri git, sonra biraz daha ilerle. Boylece ayni istasyon tekrar
-    // tetiklenmez ("surekli analiz" sorununun cozumu). Guvenlik icin 3 sn timeout.
-    ileriGit();
-    unsigned long t0 = millis();
-    while (markerRaw() && (millis() - t0) < 3000) { /* bant bitene kadar ilerle */ }
-    delay(300);              // bandi tam gecmek icin biraz daha ilerle
-
-    state = FOLLOWING;
-    markerArmed = true;      // bant gecildi -> bir sonraki istasyona hazir
+    state = LEAVING;         // bandi gec + 3 sn kesintisiz beyaz gor, sonra FOLLOWING
+    markerArmed = false;
     markerCount = 0;
+    leaveWhiteStart = 0;
     Serial.println("RESUMED");
   }
   else if (strncmp(cmd, "START", 5) == 0 || strncmp(cmd, "GO", 2) == 0) {
@@ -281,8 +282,7 @@ void loop() {
 
     case FOLLOWING:
       // Istasyon isareti algilama — DEBOUNCE'li.
-      // markerArmed: bir istasyonu isledikten sonra, RESUME ile bant FIZIKSEL
-      // olarak gecilene kadar yeniden tetiklenmeyi engeller (RESUME'da true olur).
+      // (Bant terk etme / yeniden silahlanma artik LEAVING durumunda yapilir.)
       if (markerArmed && markerRaw()) {
         markerCount++;
         if (markerCount >= MARKER_DEBOUNCE) {
@@ -291,7 +291,9 @@ void loop() {
           delay(2000);           // istasyonda 2 sn dur: robot otursun/titresim bitsin
           state = AT_MARKER;
           markerCount = 0;
-          markerArmed = false;   // istasyon islenirken tekrar tetikleme yok
+          markerArmed = false;   // EDGE LATCH: siyahi gorduk, kilitle. Beyaz
+                                 // gorulene kadar (yukaridaki 1. madde) tekrar
+                                 // MARKER atilmaz -> ayni istasyonda tek durus.
           Serial.println("MARKER");
         } else {
           // Henuz emin degiliz; takibe devam et (birkac ms surer)
@@ -301,6 +303,26 @@ void loop() {
         // Bant yok -> sayaci sifirla, normal cizgi takibi
         markerCount = 0;
         followLine(solDeger, ortaDeger, sagDeger);
+      }
+      break;
+
+    case LEAVING:
+      // Istasyonu isledik; bandi terk et. Sol sensor SIYAH iken (bant uzerinde)
+      // duz ileri git ve beyaz sayacini sifirla. BEYAZ gorunce cizgiyi takip et
+      // ve beyaz suresini say. KESINTISIZ 3 sn beyaz gorulunce yeniden silahlan
+      // ve normal takibe (FOLLOWING) don.
+      if (markerRaw()) {                 // hala bant (siyah) -> duz gec
+        ileriGit();
+        leaveWhiteStart = 0;             // beyaz kesildi, sayaci sifirla
+      } else {                           // beyaz -> takip et + sure say
+        followLine(solDeger, ortaDeger, sagDeger);
+        if (leaveWhiteStart == 0) {
+          leaveWhiteStart = millis();    // beyaz yeni basladi
+        } else if (millis() - leaveWhiteStart >= LEAVE_WHITE_MS) {
+          markerArmed = true;            // 3 sn kesintisiz beyaz -> hazir
+          markerCount = 0;
+          state = FOLLOWING;
+        }
       }
       break;
 
