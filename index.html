@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgroAI — Autonomous Weed Elimination Robot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f2417; --paper:#f6f3ea; --paper2:#efe9da; --moss:#3d5a2c; --moss-d:#2a3f1e;
+    --clay:#b5562e; --gold:#c79a3a; --line:#d8d0bd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Inter",system-ui,sans-serif;line-height:1.65}
+  h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:900;line-height:1.05;margin:0}
+  a{color:var(--moss)}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 28px}
+  /* glass navbar */
+  nav{position:sticky;top:0;z-index:30;background:rgba(246,243,234,.78);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);border-bottom:1px solid var(--line)}
+  nav .in{display:flex;align-items:center;justify-content:space-between;max-width:1040px;margin:0 auto;padding:13px 28px}
+  .brand{font-family:"Fraunces",serif;font-weight:900;font-size:22px;color:var(--ink);letter-spacing:-.01em;text-decoration:none}
+  .brand em{color:var(--moss);font-style:italic}
+  .nav-cta{display:inline-flex;align-items:center;gap:8px;background:var(--moss);color:#fff;padding:9px 17px;border-radius:30px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s}
+  .nav-cta:hover{background:var(--moss-d)}
+  .nav-cta svg{display:block}
+
+  /* hero */
+  .hero{padding:64px 0 40px;border-bottom:2px solid var(--line)}
+  .hero-grid{display:grid;grid-template-columns:1fr minmax(260px,340px);gap:56px;align-items:center}
+  .hero-copy{min-width:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.22em;font-size:12px;font-weight:600;color:var(--clay)}
+  .hero h1{font-size:clamp(40px,6vw,78px);margin:14px 0 6px;letter-spacing:-.02em}
+  .hero h1 em{font-style:italic;color:var(--moss)}
+  .lede{font-size:clamp(17px,2.2vw,21px);max-width:560px;color:#3a3d30}
+  .meta{margin-top:30px;display:flex;flex-direction:column;gap:0;font-size:14px;color:#5a5c4d}
+  .meta>div{display:flex;align-items:baseline;gap:14px;border-top:1px solid var(--line);padding:13px 0}
+  .meta b{font-family:"Fraunces",serif;font-size:30px;color:var(--ink);font-weight:600;min-width:90px;line-height:1}
+  @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:32px}.film{margin:6px 0 0}.lede{max-width:none}}
+
+  /* video */
+  .film{margin:0;text-align:center}
+  .demo-video{display:block;margin:0 auto;width:auto;max-width:100%;max-height:min(600px,74vh);
+    border-radius:12px;border:1px solid var(--moss-d);background:#1a2713;
+    box-shadow:0 24px 50px -28px rgba(40,55,25,.7)}
+  .frame{position:relative;aspect-ratio:16/9;border-radius:4px;overflow:hidden;
+    background:linear-gradient(135deg,var(--moss-d),#1a2713);display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--moss-d);box-shadow:0 24px 50px -28px rgba(40,55,25,.7)}
+  .frame .play{width:78px;height:78px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center}
+  .frame .play::after{content:"";border-left:24px solid var(--moss-d);border-top:15px solid transparent;border-bottom:15px solid transparent;margin-left:6px}
+  .frame .tag{position:absolute;bottom:16px;left:18px;color:#eee;font-size:13px;letter-spacing:.04em;background:rgba(0,0,0,.35);padding:5px 12px;border-radius:30px}
+  .cap{font-size:13px;color:#6c6e5d;margin-top:10px;font-style:italic}
+
+  section{padding:60px 0;border-bottom:1px solid var(--line)}
+  .kicker{font-family:"Fraunces",serif;font-style:italic;color:var(--clay);font-size:19px}
+  section h2{font-size:clamp(28px,4vw,40px);margin:6px 0 8px}
+
+  /* pipeline */
+  .flow{display:grid;gap:14px;margin-top:30px}
+  .step{display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start;padding:18px 20px;background:var(--paper2);border-radius:6px;border-left:4px solid var(--moss)}
+  .step .n{font-family:"Fraunces",serif;font-weight:900;font-size:30px;color:var(--moss);line-height:1}
+  .step h3{font-size:19px;margin-bottom:3px}
+  .step p{margin:0;font-size:15px;color:#4c4e3f}
+
+  /* gallery */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+  .card .b{padding:12px 14px}
+  .badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:20px;color:#fff}
+  .b-healthy{background:var(--moss)} .b-diseased{background:var(--clay)} .b-weed{background:var(--gold);color:#3a2f0c}
+  .conf{font-size:13px;color:#6c6e5d;margin-top:7px}
+  .conf .route{color:#8a8c79}
+
+  /* demo photo gallery */
+  .feature{margin:28px 0 18px}
+  .feature img{width:100%;aspect-ratio:16/7;object-fit:cover;display:block;border-radius:6px;border:1px solid var(--line)}
+  .feature figcaption{font-size:13px;color:#6c6e5d;margin-top:10px;font-style:italic}
+  .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .pgrid figure{margin:0}
+  .pgrid img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:6px;border:1px solid var(--line)}
+  .pgrid figcaption{font-size:13px;color:#6c6e5d;margin-top:9px;line-height:1.5}
+
+  /* robot camera POV gallery */
+  .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+  .cgrid figure{margin:0}
+  .cgrid img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:6px;border:1px solid var(--line)}
+  .cgrid figcaption{font-size:13px;color:#6c6e5d;margin-top:9px;line-height:1.5;display:flex;gap:8px;align-items:baseline}
+  .cgrid figcaption .badge{flex:none}
+
+  /* modules */
+  .mods{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px}
+  .mod{padding:20px;background:var(--paper2);border-radius:6px}
+  .mod h3{font-size:18px}.mod span{font-size:12px;color:var(--clay);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .mod p{font-size:14px;color:#4c4e3f;margin:6px 0 0}
+
+  /* team */
+  .team{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px}
+  .team .tcard{flex:0 1 calc((100% - 32px)/3);box-sizing:border-box}
+  .tcard{background:var(--paper2);border-radius:6px;padding:20px 22px;border-top:3px solid var(--moss)}
+  .tcard .mid{font-size:12px;color:var(--clay);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .tcard h3{font-size:19px;margin:3px 0 8px}
+  .tcard .trole{font-size:13px;color:#5a5c4d;margin:0 0 14px;line-height:1.55}
+  .tcard ul{list-style:none;margin:0;padding:0}
+  .tcard li{padding:11px 0;border-top:1px solid var(--line)}
+  .tcard li:first-child{border-top:none;padding-top:2px}
+  .tcard .nm{font-weight:600;color:var(--ink);font-size:15px}
+  .tcard .rl{font-size:13px;color:#5a5c4d;margin-top:1px}
+  .tcard .lk{display:flex;gap:14px;margin-top:7px}
+  .tcard .lk a{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--moss);text-decoration:none;font-weight:500}
+  .tcard .lk a:hover{color:var(--moss-d);text-decoration:underline}
+  .tcard .lk svg{display:block;flex:none}
+
+  footer{padding:50px 0 70px;text-align:center}
+  footer .big{font-family:"Fraunces",serif;font-size:28px}
+  .pills{margin-top:18px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .pill{padding:9px 18px;border:1px solid var(--moss);border-radius:30px;text-decoration:none;color:var(--moss);font-weight:500;font-size:14px}
+  .pill.solid{background:var(--moss);color:#fff}
+  @media(max-width:720px){.grid{grid-template-columns:1fr 1fr}.pgrid{grid-template-columns:1fr}.cgrid{grid-template-columns:1fr}.mods{grid-template-columns:1fr}.team .tcard{flex-basis:100%}}
+</style>
+</head>
+<body>
+<nav><div class="in">
+  <a class="brand" href="#">Agro<em>AI</em></a>
+  <a class="nav-cta" href="https://github.com/AgroAI-Systems/agroai-vlm-based-autonomous-robot" target="_blank" rel="noopener">
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+ <div class="hero-grid">
+  <div class="hero-copy">
+   <div class="eyebrow">CSE396 Senior Design · Group 9</div>
+   <h1>Autonomous weeding, <em>plant by plant</em>.</h1>
+   <p class="lede">An autonomous ground robot follows a tape line through a row of plants, stops at each one, decides what it's looking at on-device, and acts — a laser for weeds, water for the sick ones. No cloud. No human.</p>
+   <div class="meta">
+     <div><b>100%</b>on-device inference</div>
+     <div><b>3</b>plant classes</div>
+     <div><b>2</b>boards, 4 processes</div>
+     <div><b>0</b>cloud calls</div>
+   </div>
+  </div>
+
+  <div class="film">
+    <video class="demo-video" controls autoplay muted loop playsinline
+           poster="media/demo_footage/demo_poster.jpg" preload="metadata">
+      <source src="media/demo_footage/demo.mp4" type="video/mp4">
+      Your browser doesn't support embedded video — <a href="media/demo_footage/demo.mp4">download the demo</a>.
+    </video>
+    <p class="cap">Live run of the robot following the line, stopping at a plant, and acting on what it sees. Tap for sound.</p>
+  </div>
+ </div>
+</div></header>
+
+<section><div class="wrap">
+  <div class="kicker">How it works</div>
+  <h2>Sense, reason, act — one plant at a time.</h2>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><div><h3>Follow the line</h3><p>Three IR sensors keep the robot centered on the tape until the left sensor catches a black station band.</p></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Stop &amp; settle</h3><p>The robot halts, waits two seconds to stop vibrating, and signals the Raspberry Pi that a plant is in frame.</p></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Look (YOLO)</h3><p>The Pi camera grabs a frame and a custom-trained YOLO model locates the plant and classifies it: healthy, diseased, or weed.</p></div></div>
+    <div class="step"><div class="n">4</div><div><h3>Reason (bypass gate → VLM)</h3><p>A confidence gate decides whether YOLO's call is enough — or whether to escalate to a SmolVLM-256M vision-language model for a second opinion.</p></div></div>
+    <div class="step"><div class="n">5</div><div><h3>Act</h3><p>Weed → laser fires. Diseased → pump sprays. Healthy → leave it be. Then the robot resumes the line to the next plant.</p></div></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">From the demo</div>
+  <h2>The robot, in the field.</h2>
+  <p style="max-width:620px;color:#4c4e3f">Real photos from demo day — the taped course, the plant stations, and the pan-tilt head that aims the laser and water at each plant.</p>
+  <figure class="feature">
+    <img src="media/demo_footage/20260604_132658.jpg" alt="Top-down view of the demo course with three plant stations and the robot">
+    <figcaption>The full course: a taped line with black station markers, three potted plants, and the robot ready to run.</figcaption>
+  </figure>
+  <div class="pgrid">
+    <figure><img src="media/demo_footage/20260604_132703.jpg" alt="Robot following the line on the course"><figcaption>On the line — Raspberry Pi, camera, and pan-tilt head up top; the drive base below.</figcaption></figure>
+    <figure><img src="media/demo_footage/20260604_132715.jpg" alt="Robot with its arm extended over a plant station"><figcaption>Arm extended over a station, lined up to act on the plant.</figcaption></figure>
+    <figure><img src="media/demo_footage/20260604_132717.jpg" alt="Robot stopped beside a potted apple plant"><figcaption>Stopped at an apple plant — camera and actuators aimed and ready.</figcaption></figure>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">Through the robot's eye</div>
+  <h2>What the camera actually captured.</h2>
+  <p style="max-width:620px;color:#4c4e3f">Real frames grabbed by the Pi camera the moment the robot stopped at each station — exactly what gets fed to YOLO for classification.</p>
+  <div class="cgrid">
+    <figure><img src="media/captures/capture_0005.jpg" alt="robot camera view of a healthy apple in a pot"><figcaption><span class="badge b-healthy">Healthy</span> A sound green apple at its station.</figcaption></figure>
+    <figure><img src="media/captures/capture_0001.jpg" alt="robot camera view of a spotted, diseased apple"><figcaption><span class="badge b-diseased">Diseased</span> A spotted, blemished apple — routed to the pump.</figcaption></figure>
+    <figure><img src="media/captures/capture_0002.jpg" alt="robot camera view of weed seedlings"><figcaption><span class="badge b-weed">Weed</span> Purslane seedlings — routed to the laser.</figcaption></figure>
+    <figure><img src="media/captures/capture_0007.jpg" alt="robot camera view of a healthy apple in a pot"><figcaption><span class="badge b-healthy">Healthy</span> Another clean apple, centered in frame.</figcaption></figure>
+    <figure><img src="media/captures/capture_0006.jpg" alt="robot camera view of weed seedlings in a tub"><figcaption><span class="badge b-weed">Weed</span> A denser cluster of weed seedlings.</figcaption></figure>
+    <figure><img src="media/captures/capture_0008.jpg" alt="robot camera view of a healthy apple, robot wheels reflected"><figcaption><span class="badge b-healthy">Healthy</span> Apple at a station, robot's own wheels reflected behind.</figcaption></figure>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">Under the hood</div>
+  <h2>Five modules, two boards.</h2>
+  <div class="mods">
+    <div class="mod"><span>MOD-01 · Arduino</span><h3>Pathing</h3><p>3-IR line following, station detection, and a four-state machine that knows when to stop, wait, and resume.</p></div>
+    <div class="mod"><span>MOD-02 · Raspberry Pi</span><h3>Image Processing</h3><p>picamera2 capture + custom YOLO (<code>best.pt</code>) detection, cropped to a 224×224 region of interest.</p></div>
+    <div class="mod"><span>MOD-03 · Raspberry Pi</span><h3>VLM Analysis</h3><p>SmolVLM-256M behind a YOLO-confidence bypass gate, keeping the per-plant cycle fast.</p></div>
+    <div class="mod"><span>MOD-04 · Pi + Arduino</span><h3>Decision &amp; Motor</h3><p>The orchestrator turns a decision into laser/pump commands — with auto-off safety on both sides.</p></div>
+    <div class="mod"><span>MOD-05 · Raspberry Pi</span><h3>Dashboard</h3><p>A read-only web panel that tails the run live: state, camera feed, and the latest decision.</p></div>
+    <div class="mod" style="background:var(--moss);color:#eef0e4"><span style="color:#cfe0b5">Stack</span><h3 style="color:#fff">Local &amp; lean</h3><p style="color:#dde3cc">Ultralytics YOLO · HuggingFace transformers · OpenCV · C++17 · Arduino C — all running on a Pi 4 CPU.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">The team</div>
+  <h2>Built by Group 9, module by module.</h2>
+  <p style="max-width:620px;color:#4c4e3f">Eight students across the five modules of the sense → reason → act pipeline.</p>
+  <div class="team">
+    <div class="tcard">
+      <div class="mid">MOD-01 · Pathing</div><h3>Line following</h3>
+      <p class="trole">Line following, IR sensors &amp; motor control, marker detection and the state machine.</p>
+      <ul>
+        <li><div class="nm">Berat Yılmaz</div>
+          <div class="lk"><a href="mailto:byilmaz2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/BeratY33" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+        <li><div class="nm">Mehmet Efe Hırkalı</div>
+          <div class="lk"><a href="mailto:m.hirkali2023@gtu.edu.tr">✉ Email</a><a href="https://github.com/mehmethirkali" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+      </ul>
+    </div>
+    <div class="tcard">
+      <div class="mid">MOD-02 · Image Processing</div><h3>Vision capture</h3>
+      <p class="trole">Camera pipeline &amp; preprocessing, YOLO detection and bounding-box output.</p>
+      <ul>
+        <li><div class="nm">Mustafa Başaran</div>
+          <div class="lk"><a href="mailto:m.basaran2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/mustafabasarann" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+        <li><div class="nm">Salih Cengiz</div>
+          <div class="lk"><a href="mailto:s.cengiz2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/salihcengiz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+      </ul>
+    </div>
+    <div class="tcard">
+      <div class="mid">MOD-03 · VLM Analysis</div><h3>Plant reasoning</h3>
+      <p class="trole">VLM inference, prompt engineering, output parsing and validation.</p>
+      <ul>
+        <li><div class="nm">Umut Akman</div>
+          <div class="lk"><a href="mailto:u.akman2025@gtu.edu.tr">✉ Email</a><a href="https://github.com/umutakkman" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+        <li><div class="nm">Bekir Göktepe</div>
+          <div class="lk"><a href="mailto:b.goktepe2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/bekirr19" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+      </ul>
+    </div>
+    <div class="tcard">
+      <div class="mid">MOD-04 · Decision &amp; Motor</div><h3>Orchestration</h3>
+      <p class="trole">Decision logic &amp; state design, integration and actuator workflow.</p>
+      <ul>
+        <li><div class="nm">Muhammed Paşa</div>
+          <div class="lk"><a href="mailto:m.pasa2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/M-Pasa" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+        <li><div class="nm">Fatih Mehmet Serenli</div>
+          <div class="lk"><a href="mailto:f.serenli2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/fatihserenli-rgb" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+      </ul>
+    </div>
+    <div class="tcard">
+      <div class="mid">MOD-05 · Dashboard</div><h3>Monitoring</h3>
+      <p class="trole">Dashboard server, live status, run data and reporting.</p>
+      <ul>
+        <li><div class="nm">Umut Akman</div>
+          <div class="lk"><a href="mailto:u.akman2025@gtu.edu.tr">✉ Email</a><a href="https://github.com/umutakkman" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+        <li><div class="nm">Muhammed Paşa</div>
+          <div class="lk"><a href="mailto:m.pasa2022@gtu.edu.tr">✉ Email</a><a href="https://github.com/M-Pasa" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a></div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <p class="big">Built by Group 9 — AgroAI Systems.</p>
+  <div class="pills">
+    <a class="pill solid" href="https://github.com/AgroAI-Systems/agroai-vlm-based-autonomous-robot" target="_blank" rel="noopener">View the code</a>
+    <a class="pill" href="docs/README.md">Read the docs</a>
+  </div>
+</div></footer>
+</body>
+</html>

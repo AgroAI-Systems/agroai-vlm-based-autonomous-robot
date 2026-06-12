@@ -46,3 +46,7 @@ logs/
 build/
 dist/
 *.egg-info/
+
+# Raw demo footage — the compressed web version (media/demo_footage/demo.mp4) is
+# committed instead; the original 8K source is too large for the repo.
+media/demo_footage/20260604_132557.mp4
